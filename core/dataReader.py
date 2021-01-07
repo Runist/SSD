@@ -98,7 +98,7 @@ class DataReader(object):
         x[x[:, :, 0] > 360, 0] = 360
         x[:, :, 1:][x[:, :, 1:] > 1] = 1
         x[x < 0] = 0
-        image = cv.cvtColor(x, cv.COLOR_HSV2RGB)*255
+        image = cv.cvtColor(x, cv.COLOR_HSV2RGB)
 
         # 为填充过后的图片，矫正box坐标，如果没有box需要检测annotation文件
         if len(box) <= 0:
@@ -155,7 +155,6 @@ class DataReader(object):
                     continue
 
                 j += 1
-                # 计算真实框对应的先验框，与这个先验框应当有的预测结果
 
                 one_hot_label = np.eye(self.num_classes)[np.array(bbox[:, 4], np.int32)]
                 boxes = np.concatenate([bbox[:, :4], one_hot_label], axis=-1)
@@ -166,7 +165,7 @@ class DataReader(object):
                 boxes_and_label.append(boxes)
 
             image_data = np.array(image_data)
-            boxes_and_label = np.array(boxes_and_label)
+            boxes_and_label = np.array(boxes_and_label, dtype=np.float32)
 
             yield image_data, boxes_and_label
 
@@ -211,7 +210,7 @@ if __name__ == '__main__':
 
     anchors = get_anchors()
     box_parse = BoundingBox(21, anchors)
-    reader = DataReader("../config/test.txt", box_parse, 21, 4, (300, 300))
+    reader = DataReader("../config/test.txt", box_parse, cfg.num_class, cfg.batch_size, cfg.input_shape)
     train = reader.generate()
 
     for img, label in train:

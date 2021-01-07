@@ -13,7 +13,7 @@ import tensorflow as tf
 
 class BoundingBox(object):
     def __init__(self, num_classes, anchors=None,
-                 max_threshold=0.7, min_threshold=0.3, nms_thresh=0.7, top_k=300):
+                 max_threshold=0.5, nms_thresh=0.7, top_k=300):
         """
         预测框、先验框解析
         :param anchors: 先验框对象，如果没有，就直接按照特征层shape为38x38生成
@@ -28,7 +28,6 @@ class BoundingBox(object):
             self.anchors = get_anchors(cfg.input_shape)
         self.num_anchors = 0 if anchors is None else len(anchors)
         self.max_threshold = max_threshold
-        self.min_threshold = min_threshold
         self.nms_thresh = nms_thresh
         self.top_k = top_k
 
@@ -67,34 +66,37 @@ class BoundingBox(object):
         :return:
         """
         iou = self.iou(box)
+        # 创建一个0矩阵，前四位为坐标，最后一位为iou
         encoded_box = np.zeros((self.num_anchors, 5))
 
-        # 找到每一个iou大于0.7的框
-        assign_mask = iou > self.max_threshold
+        # 找到每一个iou大于0.5的框
+        mask = iou > self.max_threshold
 
         # 如果从上述条件中没有选出任何先验框，则选用iou最大的框
-        if not assign_mask.any():
-            assign_mask[iou.argmax()] = True
+        if not mask.any():
+            mask[iou.argmax()] = True
         # 给最后一个维度标签位  置为iou
-        encoded_box[:, -1][assign_mask] = iou[assign_mask]
+        encoded_box[:, -1][mask] = iou[mask]
 
-        # 根据assign_mask，找到对应的先验框
-        assigned_anchors = self.anchors[assign_mask]
-        # 逆向编码，将真实框转化为FasterRCNN预测结果的格式
+        # 根据mask，找到对应的先验框
+        anchors = self.anchors[mask]
+        # 逆向编码，将真实框转化为SSD预测结果的格式
         # 先计算真实框的中心与长宽
         box_xy = 0.5 * (box[:2] + box[2:])
         box_wh = box[2:] - box[:2]
         # 再计算重合度较高的先验框的中心与长宽
-        anchors_xy = 0.5 * (assigned_anchors[:, :2] + assigned_anchors[:, 2:4])
-        anchors_wh = (assigned_anchors[:, 2:4] - assigned_anchors[:, :2])
+        anchors_xy = 0.5 * (anchors[:, :2] + anchors[:, 2:4])
+        anchors_wh = (anchors[:, 2:4] - anchors[:, :2])
 
-        # 逆向求取FasterRCNN应该有的预测结果 - 公式在论文中
-        encoded_box[:, :2][assign_mask] = box_xy - anchors_xy
-        encoded_box[:, :2][assign_mask] /= anchors_wh
-        encoded_box[:, :2][assign_mask] *= 4
+        # 逆向求取SSD应该有的预测结果
+        encoded_box[:, :2][mask] = box_xy - anchors_xy
+        encoded_box[:, :2][mask] /= anchors_wh
+        # 除去变换系数
+        encoded_box[:, :2][mask] /= anchors[:, -4:-2]
 
-        encoded_box[:, 2:4][assign_mask] = np.log(box_wh / anchors_wh)
-        encoded_box[:, 2:4][assign_mask] *= 4
+        encoded_box[:, 2:4][mask] = np.log(box_wh / anchors_wh)
+        # 除去变换系数
+        encoded_box[:, 2:4][mask] /= anchors[:, -2:]
 
         return encoded_box
 
@@ -165,7 +167,7 @@ class BoundingBox(object):
         encoded_boxes = np.apply_along_axis(self.encode_box, 1, boxes[:, :4])
         encoded_boxes = encoded_boxes.reshape(-1, self.num_anchors, 5)
 
-        # 在同一个位置上，有可能会有多个物体的iou同时超过0.7
+        # 在同一个位置上，有可能会有多个物体的iou同时超过阈值
         # 由于apply_along_axis是在不同层上计算的，但最后只会输出一个先验框矩阵，
         # 为了解决一个位置上有多个框的问题，所以选出iou最大的值作为这个位置的框
         best_iou = encoded_boxes[:, :, -1].max(axis=0)
@@ -183,7 +185,9 @@ class BoundingBox(object):
         box_data[:, :4][best_iou_mask] = encoded_boxes[best_iou_idx, np.arange(box_num), :4]
         # 4代表为背景的概率，为0
         box_data[:, 4][best_iou_mask] = 0
+        # 5:-8是分类的one-hot编码，与boxes值4:相同
         box_data[:, 5:-8][best_iou_mask] = boxes[best_iou_idx, 4:]
+        # -8则为是否为物体的概率
         box_data[:, -8][best_iou_mask] = 1
 
         return box_data

@@ -122,6 +122,11 @@ class GetAnchor(Anchor):
 
 
 def get_anchors(img_size=(300, 300)):
+    """
+    获取anchor
+    :param img_size:
+    :return:
+    """
     if img_size == (512, 512):
         features_map_length = [64, 32, 16, 8, 6, 4]
     elif img_size == (300, 300):
