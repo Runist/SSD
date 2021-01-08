@@ -173,7 +173,7 @@ def SSD300():
                                             axis=2, name='predictions')
 
     model = models.Model(net['input'], net['predictions'])
-    model.summary()
+    # model.summary()
 
     return model
 

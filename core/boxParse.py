@@ -12,15 +12,14 @@ import tensorflow as tf
 
 
 class BoundingBox(object):
-    def __init__(self, num_classes, anchors=None,
-                 max_threshold=0.5, nms_thresh=0.7, top_k=300):
+    def __init__(self, num_classes, anchors=None, max_threshold=0.5, nms_thresh=0.7, top_k=300):
         """
         预测框、先验框解析
         :param anchors: 先验框对象，如果没有，就直接按照特征层shape为38x38生成
         :param max_threshold: iou的上限阈值
         :param min_threshold: iou的下限阈值
         :param nms_thresh: nms的重叠阈值
-        :param top_k: 前300个
+        :param top_k: 前top_k个
         """
         self.num_classes = num_classes
         self.anchors = anchors
@@ -100,22 +99,22 @@ class BoundingBox(object):
 
         return encoded_box
 
-    def decode_boxes(self, predictions, variances):
+    def decode_boxes(self, predictions, anchors, variances):
         """
         对预测框进行解码，相当于encode_box的逆操作
-        :param predictions: regression, shape=(12996, 4)
+        :param predictions: regression
         :param variances: 变换抖动系数
-        :return: 解码后的boxes矩阵, shape=(12996, 4)
+        :return: 解码后的boxes矩阵
         """
         # 获得先验框的宽与高
-        anchors_width = self.anchors[:, 2] - self.anchors[:, 0]
-        anchors_height = self.anchors[:, 3] - self.anchors[:, 1]
+        anchors_width = anchors[:, 2] - anchors[:, 0]
+        anchors_height = anchors[:, 3] - anchors[:, 1]
 
         # 获得先验框的中心点
-        anchors_center_x = 0.5 * (self.anchors[:, 2] + self.anchors[:, 0])
-        anchors_center_y = 0.5 * (self.anchors[:, 3] + self.anchors[:, 1])
+        anchors_center_x = 0.5 * (anchors[:, 2] + anchors[:, 0])
+        anchors_center_y = 0.5 * (anchors[:, 3] + anchors[:, 1])
 
-        # 计算预测框离先验框中心的偏移量——平移量（因为编码的时候乘*4，现在除掉）
+        # 计算预测框离先验框中心的偏移量——平移量（因为编码的时候乘除去了系数，所以现在需要复原）
         decode_bbox_center_x = predictions[:, 0] * anchors_width * variances[:, 0]
         decode_bbox_center_x += anchors_center_x
         decode_bbox_center_y = predictions[:, 1] * anchors_height * variances[:, 1]
@@ -195,43 +194,52 @@ class BoundingBox(object):
     def detection_out(self, predictions, confidence_threshold=0.5):
         """
         将0-1的预测结果转换成在特征图上的长宽，并进行NMS处理
-        :param predictions: rpn模型的预测
+        :param predictions: ssd模型的预测
         :param confidence_threshold: 置信度阈值
-        :return: 经过NMS处理后rpn上的坐标
+        :return:
         """
-        p_classification = predictions[0]       # 是背景还是物体
-        p_regression = predictions[1]           # 共享特征层上的坐标
+        # 网络预测的结果
+        pred_loc = predictions[0, :, :4]
+        # 变换系数
+        variances = predictions[0, :, -4:]
+        # 先验框
+        pred_anchor = predictions[0, :, -8:-4]
+        # 置信度
+        pred_conf = predictions[0, :, 4:-8]
 
-        pred = []
+        result = None
 
-        # 对每一个图片进行处理，regression 第一个维度是batch size大小，需要遍历为所有共享特征层输出结果
-        for i in range(p_regression.shape[0]):
-            # 对张特征图上的regression进行bbox的解码
-            decode_bbox = self.decode_boxes(p_regression[i])
+        # 对预测的坐标进行解码
+        decode_bbox = self.decode_boxes(pred_loc, pred_anchor, variances)
 
-            # 取出置信度数据
-            confidence = p_classification[i, :, 0]
+        for c in range(1, self.num_classes):
+            # 取出对应分类的置信度数据
+            confidence = pred_conf[:, c]
             # 大于 confidence_threshold 则认为有物体
             mask = confidence > confidence_threshold
 
-            # 取出得分高于confidence_threshold的框
-            boxes_to_process = decode_bbox[mask]
-            score_to_process = confidence[mask]
+            if len(confidence[mask]) > 0:
 
-            # 非极大抑制，去掉box重合程度高的那一些框，top_k是指最多可以通过nms获得多少个框
-            nms_index = tf.image.non_max_suppression(boxes_to_process, score_to_process, self.top_k,
-                                                     iou_threshold=self.nms_thresh)
+                # 取出得分高于confidence_threshold的框
+                boxes_to_process = decode_bbox[mask]
+                score_to_process = confidence[mask]
 
-            # 取出在非极大抑制中效果较好的 框和得分
-            good_boxes = tf.gather(boxes_to_process, nms_index).numpy()
-            good_score = tf.gather(score_to_process, nms_index).numpy()
-            good_score = np.expand_dims(good_score, axis=1)
+                # 非极大抑制，去掉box重合程度高的那一些框
+                nms_index = tf.image.non_max_suppression(boxes_to_process, score_to_process, self.top_k,
+                                                         iou_threshold=self.nms_thresh)
 
-            predict_boxes = np.concatenate((good_score, good_boxes), axis=1)
-            argsort = np.argsort(predict_boxes[:, 0])[::-1]
-            predict_boxes = predict_boxes[argsort]
+                # 取出在非极大抑制中效果较好的 框和得分
+                boxes = tf.gather(boxes_to_process, nms_index).numpy()
+                score = tf.gather(score_to_process, nms_index).numpy()
+                score = np.expand_dims(score, axis=1)
 
-            pred.append(predict_boxes[:, 1:])
+                labels = c * np.ones((len(nms_index), 1))
+                result = np.concatenate((labels, score, boxes), axis=1)
 
-        return pred
+        if result is not None:
+            # 按照置信度从低到高对结果排个序
+            argsort = np.argsort(result[:, 1])[::-1]
+            result = result[argsort]
+
+        return result
 

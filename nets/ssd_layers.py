@@ -154,5 +154,6 @@ class Anchor(layers.Layer):
         # 从(1, num_anchors, 8)变成(None, num_anchors, 8)
         pattern = [backend.shape(x)[0], 1, 1]
         anchor = backend.tile(anchor, pattern)
+        anchor = backend.cast_to_floatx(anchor)
 
         return anchor

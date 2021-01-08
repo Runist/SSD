@@ -43,6 +43,47 @@ class DataReader(object):
 
         return train, validation
 
+    def get_data(self, annotation_line):
+        """
+        获取数据（不增强）
+        :param annotation_line: 一行数据（图片路径 + 坐标）
+        :return: image，box_data
+        """
+        line = annotation_line.split()
+        image = Image.open(line[0])
+        box = np.array([np.array(list(map(int, box.split(',')))) for box in line[1:]])
+
+        image_width, image_height = image.size
+        input_width, input_height = self.input_shape
+        scale = min(input_width / image_width, input_height / image_height)
+
+        new_width = int(image_width * scale)
+        new_height = int(image_height * scale)
+
+        image = image.resize((new_width, new_height), Image.BICUBIC)
+        new_image = Image.new('RGB', self.input_shape, (128, 128, 128))
+        new_image.paste(image, ((input_width - new_width)//2, (input_height - new_height)//2))
+
+        image = np.asarray(new_image) / 255
+
+        dx = (input_width - new_width) / 2
+        dy = (input_height - new_height) / 2
+
+        # 为填充过后的图片，矫正box坐标，如果没有box需要检测annotation文件
+        if len(box) <= 0:
+            raise Exception("{} doesn't have any bounding boxes.".format(image_path))
+
+        box_data = np.zeros((self.max_boxes, 5), dtype='float32')
+        box[:, [0, 2]] = box[:, [0, 2]] * scale + dx
+        box[:, [1, 3]] = box[:, [1, 3]] * scale + dy
+
+        if len(box) > self.max_boxes:
+            box = box[:self.max_boxes]
+
+        box_data[:len(box)] = box
+
+        return image, box_data
+
     def get_random_data(self, annotation_line, hue=.1, sat=1.5, val=1.5):
         """
         数据增强（改变长宽比例、大小、亮度、对比度、颜色饱和度）
@@ -130,25 +171,34 @@ class DataReader(object):
 
         return image, box_data
 
-    def generate(self):
+    def generate(self, mode):
         """
         数据生成器
         :return: image, rpn训练标签， 真实框数据
         """
 
         i = 0
-        n = len(self.train_lines)
+        if mode == 'train':
+            n = len(self.train_lines)
+        else:
+            n = len(self.validation_lines)
 
         while True:
             image_data = []
             boxes_and_label = []
 
             if i == 0:
-                np.random.shuffle(self.train_lines)
+                if mode == 'train':
+                    np.random.shuffle(self.train_lines)
+                else:
+                    np.random.shuffle(self.validation_lines)
 
             j = 0
             while j < self.batch_size:
-                image, bbox = self.get_random_data(self.train_lines[i])
+                if mode == 'train':
+                    image, bbox = self.get_random_data(self.train_lines[i])
+                else:
+                    image, bbox = self.get_random_data(self.train_lines[i])
                 i = (i + 1) % n
 
                 if len(bbox) == 0:
@@ -203,17 +253,3 @@ def iou(box_a, box_b):
 
     return intersect_area / union_area
 
-
-if __name__ == '__main__':
-    from core.anchorGenerate import get_anchors
-    from core.boxParse import BoundingBox
-
-    anchors = get_anchors()
-    box_parse = BoundingBox(21, anchors)
-    reader = DataReader("../config/test.txt", box_parse, cfg.num_class, cfg.batch_size, cfg.input_shape)
-    train = reader.generate()
-
-    for img, label in train:
-        print(img.shape)
-        print(label.shape)
-        exit(0)

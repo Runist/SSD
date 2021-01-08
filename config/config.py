@@ -18,6 +18,6 @@ valid_rate = 0.1
 batch_size = 4
 
 epochs = 50
-learn_rating = 5e-4
+learn_rating = 1e-4
 
 variances = [0.1, 0.1, 0.2, 0.2]
