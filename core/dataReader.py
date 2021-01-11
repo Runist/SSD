@@ -73,14 +73,17 @@ class DataReader(object):
         if len(box) <= 0:
             raise Exception("{} doesn't have any bounding boxes.".format(image_path))
 
-        box_data = np.zeros((self.max_boxes, 5), dtype='float32')
         box[:, [0, 2]] = box[:, [0, 2]] * scale + dx
         box[:, [1, 3]] = box[:, [1, 3]] * scale + dy
 
-        if len(box) > self.max_boxes:
-            box = box[:self.max_boxes]
+        # 去除无效数据
+        box_data = np.array(box, dtype='float32')
 
-        box_data[:len(box)] = box
+        # 将bbox的坐标变0-1
+        box_data[:, 0] = box_data[:, 0] / input_width
+        box_data[:, 1] = box_data[:, 1] / input_height
+        box_data[:, 2] = box_data[:, 2] / input_width
+        box_data[:, 3] = box_data[:, 3] / input_height
 
         return image, box_data
 
@@ -198,7 +201,7 @@ class DataReader(object):
                 if mode == 'train':
                     image, bbox = self.get_random_data(self.train_lines[i])
                 else:
-                    image, bbox = self.get_random_data(self.train_lines[i])
+                    image, bbox = self.get_data(self.validation_lines[i])
                 i = (i + 1) % n
 
                 if len(bbox) == 0:
