@@ -74,7 +74,6 @@ class SSDPredict(object):
         box_maxes = box_yx + (box_hw / 2.)
         boxes = np.concatenate((box_mins, box_maxes), axis=-1)
         boxes *= np.concatenate([image_shape, image_shape], axis=-1)
-        print(image_shape)
 
         return boxes
 
@@ -139,10 +138,10 @@ class SSDPredict(object):
 
 
 if __name__ == '__main__':
-    img_path = "D:/Python_Code/Dataset/VOCdevkit/VOC2012/JPEGImages/2007_000123.jpg"
-    # img_path = "street.jpg"
+    # img_path = "D:/Python_Code/Dataset/VOCdevkit/VOC2012/JPEGImages/2007_000123.jpg"
+    img_path = "street.jpg"
 
-    ssd = SSDPredict('./model/ssd_3.1421.h5')
+    ssd = SSDPredict('./model/ssd_5.0567.h5')
 
     if not os.path.exists(img_path):
         print("Error,image path is not exists.")

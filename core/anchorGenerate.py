@@ -11,21 +11,16 @@ from nets.ssd_layers import Anchor
 
 
 class GetAnchor(Anchor):
-    def __init__(self, img_size, min_size, max_size, aspect_ratios=None, variances=None,
-                 **kwargs):
+    def __init__(self, img_size, min_size, max_size, aspect_ratios=None, **kwargs):
         """
 
         :param img_size: 输入到SSD的shape
         :param min_size: 先验框的短边
         :param max_size: 先验框的长边
         :param aspect_ratios: 不同尺度的先验框
-        :param variances: 每个框变化尺度
         :param kwargs:
         """
         super().__init__(img_size, min_size, max_size, **kwargs)
-
-        if variances is None:
-            variances = [0.1]
 
         self.img_size = img_size
         if min_size <= 0:
@@ -44,8 +39,6 @@ class GetAnchor(Anchor):
                 self.aspect_ratios.append(1 / ar)
         else:
             self.aspect_ratios = [1, 1]
-
-        self.variances = np.array(variances)
 
         super(Anchor, self).__init__(**kwargs)
 
@@ -106,18 +99,6 @@ class GetAnchor(Anchor):
         anchor = np.maximum(anchor, 0.0)
         anchor = np.minimum(anchor, 1.0)
 
-        num_boxes = len(anchor)
-
-        if len(self.variances) == 1:
-            variances = np.ones((num_boxes, 4)) * self.variances[0]
-        elif len(self.variances) == 4:
-            variances = np.tile(self.variances, (num_boxes, 1))
-        else:
-            raise Exception('Must provide one or four variances.')
-
-        # 把variances系数合并到anchor中
-        anchor = np.concatenate((anchor, variances), axis=1)
-
         return anchor
 
 
@@ -136,32 +117,26 @@ def get_anchors(img_size=(300, 300)):
 
     net = {}
     anchor = GetAnchor(img_size, min_size=30.0, max_size=60.0, aspect_ratios=[1, 2],
-                       variances=[0.1, 0.1, 0.2, 0.2],
                        name='f38_norm_anchor')
     net['f38_norm_anchor'] = anchor([features_map_length[0], features_map_length[0]])
 
     anchor = GetAnchor(img_size, min_size=60.0, max_size=111.0, aspect_ratios=[1, 2, 3],
-                       variances=[0.1, 0.1, 0.2, 0.2],
                        name='f19_anchor')
     net['f19_anchor'] = anchor([features_map_length[1], features_map_length[1]])
 
     anchor = GetAnchor(img_size, min_size=111.0, max_size=162.0, aspect_ratios=[1, 2, 3],
-                       variances=[0.1, 0.1, 0.2, 0.2],
                        name='f10_anchor')
     net['f10_anchor'] = anchor([features_map_length[2], features_map_length[2]])
 
     anchor = GetAnchor(img_size, min_size=162.0, max_size=213.0, aspect_ratios=[1, 2, 3],
-                       variances=[0.1, 0.1, 0.2, 0.2],
                        name='f5_anchor')
     net['f5_anchor'] = anchor([features_map_length[3], features_map_length[3]])
 
     anchor = GetAnchor(img_size, min_size=213.0, max_size=264.0, aspect_ratios=[1, 2],
-                       variances=[0.1, 0.1, 0.2, 0.2],
                        name='f3_anchor')
     net['f3_anchor'] = anchor([features_map_length[4], features_map_length[4]])
 
     anchor = GetAnchor(img_size, min_size=264.0, max_size=315.0, aspect_ratios=[1, 2],
-                       variances=[0.1, 0.1, 0.2, 0.2],
                        name='f1_anchor')
 
     net['f1_anchor'] = anchor([features_map_length[5], features_map_length[5]])

@@ -31,21 +31,17 @@ class Normalize(layers.Layer):
 
 
 class Anchor(layers.Layer):
-    def __init__(self, img_size, min_size, max_size, aspect_ratios=None, variances=None,
-                 **kwargs):
+    def __init__(self, img_size, min_size, max_size, aspect_ratios=None, **kwargs):
         """
 
         :param img_size: 输入到SSD的shape
         :param min_size: 先验框的短边
         :param max_size: 先验框的长边
         :param aspect_ratios: 不同尺度的先验框
-        :param variances: 每个框变化尺度
         :param kwargs:
         """
 
         super().__init__(**kwargs)
-        if variances is None:
-            variances = [0.1]
 
         self.img_size = img_size
         if min_size <= 0:
@@ -64,8 +60,6 @@ class Anchor(layers.Layer):
                 self.aspect_ratios.append(1 / ar)
         else:
             self.aspect_ratios = [1, 1]
-
-        self.variances = np.array(variances)
 
         super(Anchor, self).__init__(**kwargs)
 
@@ -137,21 +131,9 @@ class Anchor(layers.Layer):
 
         anchor = np.maximum(anchor, 0.0)
         anchor = np.minimum(anchor, 1.0)
-
-        num_boxes = len(anchor)
-
-        if len(self.variances) == 1:
-            variances = np.ones((num_boxes, 4)) * self.variances[0]
-        elif len(self.variances) == 4:
-            variances = np.tile(self.variances, (num_boxes, 1))
-        else:
-            raise Exception('Must provide one or four variances.')
-
-        # 把variances系数合并到anchor中
-        anchor = np.concatenate((anchor, variances), axis=1)
         anchor = np.expand_dims(anchor, 0)
 
-        # 从(1, num_anchors, 8)变成(None, num_anchors, 8)
+        # 从(1, num_anchors, 4)变成(None, num_anchors, 4)
         pattern = [backend.shape(x)[0], 1, 1]
         anchor = backend.tile(anchor, pattern)
         anchor = backend.cast_to_floatx(anchor)

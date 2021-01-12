@@ -37,7 +37,6 @@ def SSD300():
                                          name='f38_norm_conf')(net['f38_norm'])
     net['f38_norm_conf_flat'] = layers.Flatten(name='f38_norm_conf_flat')(net['f38_norm_conf'])
     anchor = Anchor(cfg.input_shape, min_size=30.0, max_size=60.0, aspect_ratios=[1, 2],
-                    variances=[0.1, 0.1, 0.2, 0.2],
                     name='f38_norm_anchor')
 
     net['f38_norm_anchor'] = anchor(net['f38_norm'])
@@ -56,7 +55,6 @@ def SSD300():
     net['f19_conf_flat'] = layers.Flatten(name='f19_conf_flat')(net['f19_conf'])
 
     anchor = Anchor(cfg.input_shape, min_size=60.0, max_size=111.0, aspect_ratios=[1, 2, 3],
-                    variances=[0.1, 0.1, 0.2, 0.2],
                     name='f19_anchor')
     net['f19_anchor'] = anchor(net['f19'])
 
@@ -74,7 +72,6 @@ def SSD300():
     net['f10_conf_flat'] = layers.Flatten(name='f10_conf_flat')(net['f10_conf'])
 
     anchor = Anchor(cfg.input_shape, min_size=111.0, max_size=162.0, aspect_ratios=[1, 2, 3],
-                    variances=[0.1, 0.1, 0.2, 0.2],
                     name='f10_anchor')
     net['f10_anchor'] = anchor(net['f10'])
 
@@ -92,7 +89,6 @@ def SSD300():
     net['f5_conf_flat'] = layers.Flatten(name='f5_conf_flat')(net['f5_conf'])
 
     anchor = Anchor(cfg.input_shape, min_size=162.0, max_size=213.0, aspect_ratios=[1, 2, 3],
-                    variances=[0.1, 0.1, 0.2, 0.2],
                     name='f5_anchor')
     net['f5_anchor'] = anchor(net['f5'])
 
@@ -110,7 +106,6 @@ def SSD300():
     net['f3_conf_flat'] = layers.Flatten(name='f3_conf_flat')(net['f3_conf'])
 
     anchor = Anchor(cfg.input_shape, min_size=213.0, max_size=264.0, aspect_ratios=[1, 2],
-                    variances=[0.1, 0.1, 0.2, 0.2],
                     name='f3_anchor')
     net['f3_anchor'] = anchor(net['f3'])
 
@@ -128,7 +123,6 @@ def SSD300():
     net['f1_conf_flat'] = layers.Flatten(name='f1_conf_flat')(net['f1_conf'])
 
     anchor = Anchor(cfg.input_shape, min_size=264.0, max_size=315.0, aspect_ratios=[1, 2],
-                    variances=[0.1, 0.1, 0.2, 0.2],
                     name='f1_anchor')
 
     net['f1_anchor'] = anchor(net['f1'])

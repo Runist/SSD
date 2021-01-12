@@ -49,17 +49,17 @@ class MultiboxLoss(object):
 
         # 计算所有的loss
         # batch_size,8732,21 -> batch_size,8732
-        conf_loss = self.softmax_loss(y_true[:, :, 4:-8], y_pred[:, :, 4:-8])
+        conf_loss = self.softmax_loss(y_true[:, :, 4:-4], y_pred[:, :, 4:-4])
         # batch_size,8732,4 -> batch_size,8732
         loc_loss = self.l1_smooth_loss(y_true[:, :, :4], y_pred[:, :, :4])
 
         # 获取所有的正标签的loss
         # 获取y_true正例个数
-        num_pos = tf.reduce_sum(y_true[:, :, -8], axis=-1)
+        num_pos = tf.reduce_sum(y_true[:, :, -4], axis=-1)
         # 每一张图的正例loc_loss, shape: (batch_size, 8732)
-        pos_loc_loss = tf.reduce_sum(loc_loss * y_true[:, :, -8], axis=-1)
+        pos_loc_loss = tf.reduce_sum(loc_loss * y_true[:, :, -4], axis=-1)
         # 每一张图的正例conf_loss
-        pos_conf_loss = tf.reduce_sum(conf_loss * y_true[:, :, -8], axis=-1)
+        pos_conf_loss = tf.reduce_sum(conf_loss * y_true[:, :, -4], axis=-1)
 
         # 获取一定的负样本
         num_neg = tf.minimum(self.neg_pos_ratio * num_pos, num_boxes - num_pos)
@@ -77,10 +77,10 @@ class MultiboxLoss(object):
         num_neg_batch = tf.cast(num_neg_batch, tf.int32)
 
         # 找到实际上在该位置不应该有预测结果的框，求他们最大的置信度。
-        max_confs = tf.reduce_max(y_pred[:, :, 5:-8], axis=-1)
+        max_confs = tf.reduce_max(y_pred[:, :, 5:-4], axis=-1)
 
         # 取top_k个置信度，将y_true的置信度翻转，只要背景的置信度，从分数高到低依次向下取，作为负样本
-        _, indices = tf.nn.top_k(max_confs * (1 - y_true[:, :, -8]), k=num_neg_batch)
+        _, indices = tf.nn.top_k(max_confs * (1 - y_true[:, :, -4]), k=num_neg_batch)
 
         # 找到其在1维上的索引
         batch_idx = tf.expand_dims(tf.range(0, batch_size), 1)

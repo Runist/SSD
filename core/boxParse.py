@@ -91,19 +91,18 @@ class BoundingBox(object):
         encoded_box[:, :2][mask] = box_xy - anchors_xy
         encoded_box[:, :2][mask] /= anchors_wh
         # 除去变换系数
-        encoded_box[:, :2][mask] /= anchors[:, -4:-2]
+        encoded_box[:, :2][mask] /= cfg.variances[:2]
 
         encoded_box[:, 2:4][mask] = np.log(box_wh / anchors_wh)
         # 除去变换系数
-        encoded_box[:, 2:4][mask] /= anchors[:, -2:]
+        encoded_box[:, 2:4][mask] /= cfg.variances[2:4]
 
         return encoded_box
 
-    def decode_boxes(self, predictions, anchors, variances):
+    def decode_boxes(self, predictions, anchors):
         """
         对预测框进行解码，相当于encode_box的逆操作
         :param predictions: regression
-        :param variances: 变换抖动系数
         :return: 解码后的boxes矩阵
         """
         # 获得先验框的宽与高
@@ -115,15 +114,15 @@ class BoundingBox(object):
         anchors_center_y = 0.5 * (anchors[:, 3] + anchors[:, 1])
 
         # 计算预测框离先验框中心的偏移量——平移量（因为编码的时候乘除去了系数，所以现在需要复原）
-        decode_bbox_center_x = predictions[:, 0] * anchors_width * variances[:, 0]
+        decode_bbox_center_x = predictions[:, 0] * anchors_width * cfg.variances[0]
         decode_bbox_center_x += anchors_center_x
-        decode_bbox_center_y = predictions[:, 1] * anchors_height * variances[:, 1]
+        decode_bbox_center_y = predictions[:, 1] * anchors_height * cfg.variances[1]
         decode_bbox_center_y += anchors_center_y
 
         # 预测框的实际宽与高的求取——尺度变换
-        decode_bbox_width = np.exp(predictions[:, 2] * variances[:, 2])
+        decode_bbox_width = np.exp(predictions[:, 2] * cfg.variances[2])
         decode_bbox_width *= anchors_width
-        decode_bbox_height = np.exp(predictions[:, 3] * variances[:, 3])
+        decode_bbox_height = np.exp(predictions[:, 3] * cfg.variances[3])
         decode_bbox_height *= anchors_height
 
         # 获取真实框的左上角与右下角
@@ -151,7 +150,7 @@ class BoundingBox(object):
         :param boxes: 真实框数据
         :return: 转换后的框数据
         """
-        box_data = np.zeros((self.num_anchors, 4 + self.num_classes + 8))
+        box_data = np.zeros((self.num_anchors, 4 + self.num_classes + 4))
 
         # 先把标签全部置为1
         box_data[:, 4] = 1.0
@@ -184,10 +183,10 @@ class BoundingBox(object):
         box_data[:, :4][best_iou_mask] = encoded_boxes[best_iou_idx, np.arange(box_num), :4]
         # 4代表为背景的概率，为0
         box_data[:, 4][best_iou_mask] = 0
-        # 5:-8是分类的one-hot编码，与boxes值4:相同
-        box_data[:, 5:-8][best_iou_mask] = boxes[best_iou_idx, 4:]
-        # -8则为是否为物体的概率
-        box_data[:, -8][best_iou_mask] = 1
+        # 5:-4是分类的one-hot编码，与boxes值4:相同
+        box_data[:, 5:-4][best_iou_mask] = boxes[best_iou_idx, 4:]
+        # -4则为是否为物体的概率
+        box_data[:, -4][best_iou_mask] = 1
 
         return box_data
 
@@ -200,17 +199,15 @@ class BoundingBox(object):
         """
         # 网络预测的结果
         pred_loc = predictions[0, :, :4]
-        # 变换系数
-        variances = predictions[0, :, -4:]
         # 先验框
-        pred_anchor = predictions[0, :, -8:-4]
+        pred_anchor = predictions[0, :, -4:]
         # 置信度
-        pred_conf = predictions[0, :, 4:-8]
+        pred_conf = predictions[0, :, 4:-4]
 
         result = None
 
         # 对预测的坐标进行解码
-        decode_bbox = self.decode_boxes(pred_loc, pred_anchor, variances)
+        decode_bbox = self.decode_boxes(pred_loc, pred_anchor)
 
         for c in range(1, self.num_classes):
             # 取出对应分类的置信度数据
